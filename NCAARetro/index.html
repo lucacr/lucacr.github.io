@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCAA Gridiron Retro Bowl</title>
+    <!-- Tailwind CSS per layout rapido e responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configurazione tema retro in Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        retroBg: '#0b160c',      /* Verde scuro lavagna */
+                        retroGreen: '#39ff14',   /* Verde neon classico */
+                        retroYard: '#1b4d22',    /* Linee campo */
+                        retroOrange: '#ffb703',  /* Primo down / Highlights */
+                        retroYellow: '#ffd166',
+                        retroTerminal: '#152b18' /* Sfondo log */
+                    },
+                    fontFamily: {
+                        mono: ['Courier New', 'Courier', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Effetto CRT retro e stili personalizzati */
+        body {
+            background-color: #050a06;
+            color: #39ff14;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 4px rgba(57, 255, 20, 0.6);
+        }
+        .retro-border {
+            border: 2px solid #39ff14;
+            box-shadow: 0 0 8px rgba(57, 255, 20, 0.4);
+        }
+        .retro-btn {
+            background-color: #0f2d14;
+            border: 2px solid #39ff14;
+            transition: all 0.2s ease;
+        }
+        .retro-btn:hover:not(:disabled) {
+            background-color: #39ff14;
+            color: #0b160c;
+            box-shadow: 0 0 12px rgba(57, 255, 20, 0.8);
+        }
+        .retro-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: #1b4d22;
+            color: #1b4d22;
+        }
+        /* Scrollbar personalizzata per il log sul lato destro */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0b160c;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #39ff14;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-3 sm:p-6 select-none">
+
+    <!-- Container Principale -->
+    <div class="w-full max-w-4xl flex flex-col gap-4">
+        
+        <!-- Header con Titolo e info PWA -->
+        <header class="flex justify-between items-center retro-border bg-retroBg p-3 rounded">
+            <div>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-wider text-retroOrange">🏈 NCAA RETRO GRIDIRON</h1>
+                <p class="text-xs text-retroGreen opacity-80">College Football Coach Simulator</p>
+            </div>
+            <div class="text-right">
+                <button id="installPwaBtn" class="hidden text-xs retro-btn py-1 px-2 rounded font-bold">INSTALLA APP</button>
+                <span class="text-xs text-retroOrange" id="currentMatchup">Matchup Caricamento...</span>
+            </div>
+        </header>
+
+        <!-- Schermata di Selezione Squadre (Iniziale) -->
+        <div id="teamSelectionScreen" class="retro-border bg-retroBg p-6 rounded flex flex-col gap-6">
+            <h2 class="text-lg font-bold text-center text-retroOrange border-b border-retroGreen pb-2">SELEZIONA LE SQUADRE</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Giocatore -->
+                <div class="flex flex-col gap-3">
+                    <label class="font-bold text-retroOrange">Tua Squadra (Giocatore):</label>
+                    <select id="playerTeamSelect" class="bg-retroTerminal border-2 border-retroGreen p-2 rounded text-retroGreen outline-none">
+                        <!-- Popolato via JS -->
+                    </select>
+                    <div id="playerTeamDetails" class="text-xs text-white opacity-80 italic mt-1"></div>
+                </div>
+
+                <!-- Computer -->
+                <div class="flex flex-col gap-3">
+                    <label class="font-bold text-retroYellow">Squadra Avversaria (CPU):</label>
+                    <select id="cpuTeamSelect" class="bg-retroTerminal border-2 border-retroGreen p-2 rounded text-retroGreen outline-none">
+                        <!-- Popolato via JS -->
+                    </select>
+                    <div id="cpuTeamDetails" class="text-xs text-white opacity-80 italic mt-1"></div>
+                </div>
+            </div>
+
+            <div class="flex justify-center mt-4">
+                <button id="startGameBtn" class="retro-btn py-3 px-8 text-lg font-bold rounded">INIZIA LA PARTITA 🏈</button>
+            </div>
+        </div>
+
+        <!-- Schermata di Gioco Effettiva (Nascosta all'inizio) -->
+        <div id="gamePlayScreen" class="hidden flex flex-col gap-4">
+            
+            <!-- Campo di Gioco Vettoriale (Disegnato dinamicamente) -->
+            <div class="retro-border bg-retroBg p-2 rounded flex flex-col gap-1 items-center">
+                <div class="w-full overflow-x-auto">
+                    <!-- Campo SVG a larghezza fluida -->
+                    <svg id="footballField" viewBox="0 0 1200 180" class="w-full min-w-[800px] h-auto bg-[#071107] border border-retroGreen rounded"></svg>
+                </div>
+                <!-- Riga di testo descrittiva della palla e direzione -->
+                <div class="w-full bg-[#050a06] py-1 px-3 rounded flex flex-col sm:flex-row justify-between text-xs sm:text-sm text-retroOrange font-semibold tracking-wide gap-1 border-t border-[#1b4d22]">
+                    <span id="ballPositionText">Palla sulle 20 yard...</span>
+                    <span id="possessionIndicatorText" class="text-retroGreen">Possesso: ---</span>
+                </div>
+            </div>
+
+            <!-- Scoreboard / Tabellone Punteggio -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 retro-border bg-retroBg p-3 rounded text-center">
+                <div class="border-r border-retroGreen/30">
+                    <div class="text-xs text-retroOrange font-bold">PUNTEGGIO</div>
+                    <div class="text-lg sm:text-xl font-bold" id="scoreDisplay">Uman 0 - 0 CPU</div>
+                </div>
+                <div class="border-r border-retroGreen/30">
+                    <div class="text-xs text-retroOrange font-bold">DOWN & DISTANZA</div>
+                    <div class="text-lg sm:text-xl font-bold" id="downDistanceDisplay">1° & 10</div>
+                </div>
+                <div class="border-r border-retroGreen/30">
+                    <div class="text-xs text-retroOrange font-bold">POSIZIONE BALL</div>
+                    <div class="text-lg sm:text-xl font-bold" id="ballYardDisplay">Linea 20</div>
+                </div>
+                <div>
+                    <div class="text-xs text-retroOrange font-bold">QUARTO & TEMPO</div>
+                    <div class="text-lg sm:text-xl font-bold text-retroYellow" id="timeDisplay">Q1 - 5:00</div>
+                </div>
+            </div>
+
+            <!-- Area Principale di Interazione (Playbook a sinistra, Console a destra) -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                
+                <!-- PLAYBOOK / INTERFACCIA DECISIONI (7 colonne) -->
+                <div class="md:col-span-7 flex flex-col gap-2 retro-border bg-retroBg p-3 rounded h-[440px] justify-between">
+                    <div class="w-full flex flex-col gap-2">
+                        <div class="border-b border-retroGreen pb-1 flex justify-between items-center">
+                            <h3 class="text-sm sm:text-base font-bold text-retroOrange uppercase" id="playbookTitle">Chiamata d'Attacco</h3>
+                            <!-- Nuovo pulsante di esecuzione compatto al posto di tacticalStatus -->
+                            <button id="snapBallBtn" disabled class="retro-btn text-sm sm:text-base px-3 py-1 font-bold rounded shrink-0">
+                                🏈 SNAP THE BALL!
+                            </button>
+                            <!-- Elemento nascosto per compatibilità retroattiva con lo script JS -->
+                            <span id="tacticalStatus" class="hidden"></span>
+                        </div>
+
+                        <!-- Griglia degli schemi di gioco ad altezza fissa senza scorrimento -->
+                        <div id="playOptionsGrid" class="grid grid-cols-2 gap-2 h-[215px] overflow-hidden">
+                            <!-- Popolato dinamicamente da JS a seconda di attacco o difesa -->
+                        </div>
+                    </div>
+
+                    <!-- Descrizione Tattica dello Schema selezionato con scorrimento interno salvaguardia layout -->
+                    <div id="tacticalAnalysisBox" class="bg-retroTerminal p-2 rounded border border-retroGreen/40 text-[11px] flex flex-col justify-between h-[75px]">
+                        <div class="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                            <div class="font-bold text-retroOrange leading-tight" id="analysisTitle">Seleziona uno schema per studiarne i dettagli tattici</div>
+                            <p class="text-white opacity-80 leading-snug" id="analysisDesc">La tua decisione determinerà il guadagno di yard in base alla marcatura avversaria.</p>
+                        </div>
+                        <div class="flex justify-between items-center pt-0.5 border-t border-retroGreen/20 text-[9px] leading-none shrink-0">
+                            <span id="analysisPros" class="text-retroGreen font-semibold"></span>
+                            <span id="analysisCons" class="text-red-400 font-semibold"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONSOLE TELECRONACA / CRONOLOGIA (5 colonne - Altezza Fissa con Scrollbar) -->
+                <div class="md:col-span-5 flex flex-col gap-2 retro-border bg-retroTerminal p-3 rounded h-[440px]">
+                    <div class="border-b border-retroGreen/40 pb-1 flex justify-between items-center text-xs">
+                        <span class="font-bold text-retroOrange">📻 TELECRONACA RETRO</span>
+                        <button id="clearLogBtn" class="text-[10px] hover:underline">Svuota</button>
+                    </div>
+                    <!-- Area Log di Testo -->
+                    <div id="gameConsoleLog" class="flex-1 overflow-y-auto text-xs flex flex-col gap-2 font-mono p-1 bg-[#09130a] rounded border border-retroGreen/20 custom-scrollbar">
+                        <!-- Messaggi di gioco inseriti qui -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Controllo di reset e debug -->
+            <div class="flex justify-between items-center text-xs opacity-75">
+                <span>Versione PWA 1.0.0 (Retro NCAA)</span>
+                <button id="resetMatchBtn" class="hover:underline text-retroOrange">Abbandona e Ricomincia</button>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Modale GameOver / Fine Partita -->
+    <div id="gameOverModal" class="hidden fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
+        <div class="retro-border bg-retroBg max-w-md w-full p-6 rounded flex flex-col gap-4 text-center">
+            <h2 class="text-2xl font-bold text-retroOrange tracking-widest" id="gameOverTitle">PARTITA FINITA!</h2>
+            <div class="text-3xl font-mono my-2 font-bold" id="finalScoreDisplay">0 - 0</div>
+            <p id="gameOverMsg" class="text-sm opacity-90"></p>
+            <button id="restartGameBtn" class="retro-btn py-3 px-6 font-bold rounded mt-2">RIGIOCA SUBITO</button>
+        </div>
+    </div>
+
+    <!-- Script Logica del Gioco -->
+    <script>
+        // --- CONFIGURAZIONE SQUADRE NCAA ---
+        const TEAMS = [
+            { id: 'alabama', name: 'Alabama Crimson Tide', style: 'Corsa Potente & Difesa 3-4', passRate: 0.45, runPower: 1.1, defPower: 1.15, text: 'Fortissimi sulle corse centrali e pressione difensiva implacabile.' },
+            { id: 'clemson', name: 'Clemson Tigers', style: 'West Coast Offense & Cover 3', passRate: 0.55, runPower: 0.95, defPower: 1.1, text: 'Passaggi rapidi d\'efficacia chirurgica e ottime coperture difensive.' },
+            { id: 'notredame', name: 'Notre Dame Fighting Irish', style: 'Attacco Bilanciato & Difesa 4-3', passRate: 0.50, runPower: 1.05, defPower: 1.05, text: 'Tradizione d\'acciaio, gioco bilanciato solido su tutti i down.' },
+            { id: 'ohiostate', name: 'Ohio State Buckeyes', style: 'Deep Passing & Aggressive Blitz', passRate: 0.60, runPower: 0.9, defPower: 1.0, text: 'Attacco esplosivo sul lungo raggio, amano i rischi e i big play.' },
+            { id: 'michigan', name: 'Michigan Wolverines', style: 'Power Run & Cover 4 Safeties', passRate: 0.35, runPower: 1.2, defPower: 1.1, text: 'Controllo del tempo di gioco, corse fisiche massacranti e difesa sicura.' },
+            { id: 'texas', name: 'Texas Longhorns', style: 'Spread Play-Action & Nickel Defense', passRate: 0.52, runPower: 1.0, defPower: 0.95, text: 'Schemi a sorpresa e velocità sugli esterni.' },
+            { id: 'georgia', name: 'Georgia Bulldogs', style: 'Dominio Trincee & No-Fly Zone', passRate: 0.48, runPower: 1.1, defPower: 1.2, text: 'La difesa più impenetrabile del college football e corse dure.' },
+            { id: 'usc', name: 'USC Trojans', style: 'Air Raid & High Risk Zone', passRate: 0.65, runPower: 0.8, defPower: 0.9, text: 'Festa di passaggi continui. Attacco stellare, difesa vulnerabile alle corse.' }
+        ];
+
+        // --- SCHEMI ATTACCO (PLAYBOOK) ---
+        const PLAYBOOK = {
+            'inside_run': {
+                name: "🏈 Corsa Interna",
+                type: "run",
+                description: "Corsa diretta della palla dritto contro la linea di scrimmage. Sicuro, solido.",
+                efficiency: "Ottimo per guadagnare poche yard essenziali o contro difese leggere (Nickel/Dime).",
+                weakness: "Fortemente bloccato da difese pesanti incentrate sulle corse (es. Difesa 4-3).",
+                pros: "Efficace vs: Nickel / Dime",
+                cons: "Inutile vs: Difesa 4-3 / Blitz",
+                runMatch: { '4_3': 0.7, '3_4': 0.9, 'nickel': 1.3, 'dime': 1.6, 'blitz': 0.6 }
+            },
+            'outside_run': {
+                name: "🏃 Corsa Esterna",
+                type: "run",
+                description: "Corsa verso le fasce laterali cercando il blocco dei ricevitori.",
+                efficiency: "Ottimo contro formazioni statiche (4-3) se hai corridori veloci.",
+                weakness: "I Blitz esterni e la copertura Nickel rapida possono fermarti dietro la linea.",
+                pros: "Efficace vs: 4-3 Base",
+                cons: "Inutile vs: Nickel / Blitz",
+                runMatch: { '4_3': 1.3, '3_4': 1.0, 'nickel': 0.8, 'dime': 1.2, 'blitz': 0.6 }
+            },
+            'short_pass': {
+                name: "📐 Passaggio Corto",
+                type: "pass",
+                description: "Lancio rapido sul breve raggio. Alta percentuale di completamento.",
+                efficiency: "Ideale per battere i Blitz pesanti (rilascio immediato) e muovere la catena su 3° down e medio.",
+                weakness: "Se la difesa usa la Cover 2 con raddoppi piatti, rischi l'intercetto.",
+                pros: "Efficace vs: Blitz / Cover 4",
+                cons: "Inutile vs: Cover 2",
+                runMatch: { '4_3': 1.1, '3_4': 1.1, 'nickel': 0.9, 'dime': 0.8, 'blitz': 1.5 }
+            },
+            'deep_pass': {
+                name: "🚀 Lancio Lungo",
+                type: "pass",
+                description: "Passaggio profondo per i ricevitori lanciati in velocità lungo l'esterno.",
+                efficiency: "Incredibile potenziale di touchdown immediato contro marcature a uomo o difese focalizzate sulle corse (4-3).",
+                weakness: "Molto rischioso. Se la difesa copre profonda (Dime o Cover 4) o porta un forte Blitz che atterra il Quarterback.",
+                pros: "Efficace vs: 4-3 / Cover 1",
+                cons: "Inutile vs: Dime / Cover 4 / Blitz",
+                runMatch: { '4_3': 1.5, '3_4': 1.2, 'nickel': 0.9, 'dime': 0.5, 'blitz': 0.4 }
+            },
+            'play_action': {
+                name: "🎭 Play Action",
+                type: "pass",
+                description: "Finta di corsa interna e successivo passaggio a sorpresa a medio raggio.",
+                efficiency: "Congela i difensori pronti a fermare le corse. Micidiale su 1° o 2° down breve.",
+                weakness: "Se la difesa non abbocca (es. Dime orientata solo ai passaggi), la linea cede facilmente.",
+                pros: "Efficace vs: 4-3 / 3-4",
+                cons: "Inutile vs: Dime / Cover 2",
+                runMatch: { '4_3': 1.4, '3_4': 1.3, 'nickel': 0.9, 'dime': 0.7, 'blitz': 0.8 }
+            },
+            'screen_pass': {
+                name: "🛡️ Screen Pass",
+                type: "pass",
+                description: "Passaggio cortissimo arretrato a un ricevitore scortato dalla linea d'attacco.",
+                efficiency: "Batte in modo devastante i Blitz aggressivi, usando la foga avversaria contro di loro.",
+                weakness: "Se la difesa gioca a zona conservativa (Cover 3), i bloccanti vengono travolti immediatamente.",
+                pros: "Efficace vs: Blitz / 3-4",
+                cons: "Inutile vs: Cover 3",
+                runMatch: { '4_3': 0.8, '3_4': 1.2, 'nickel': 0.9, 'dime': 1.1, 'blitz': 1.7 }
+            },
+            'punt': {
+                name: "🏈 Punt",
+                type: "special",
+                description: "Calcio di allontanamento. Consegna la palla profondamente all'avversario.",
+                efficiency: "Da usare esclusivamente sul 4° Down per evitare di lasciare ottima posizione alla CPU.",
+                weakness: "Perdi il possesso della palla. Non segna punti.",
+                pros: "Mette la CPU distante",
+                cons: "Perdi il possesso",
+                runMatch: {}
+            },
+            'field_goal': {
+                name: "🎯 Field Goal",
+                type: "special",
+                description: "Calcio piazzato verso i pali per segnare 3 punti.",
+                efficiency: "Ottima opzione sul 4° down se ti trovi entro le 35 yard avversarie.",
+                weakness: "Se fallisci o sei troppo distante, la CPU riprende la palla dal punto del calcio.",
+                pros: "Garantisce 3 punti",
+                cons: "Sotto le 35-40 yard",
+                runMatch: {}
+            }
+        };
+
+        // --- SCHEMI DIFESA (FORMAZIONI) ---
+        const DEFENSE_PLAYBOOK = {
+            '4_3': {
+                name: "🛡️ 4-3 Base (Run Defense)",
+                type: "defense",
+                description: "4 Defensive Linemen e 3 Linebackers. Assetto classico bilanciato.",
+                efficiency: "Roccia impenetrabile contro le corse sia interne che esterne. Solida.",
+                weakness: "Copre meno spazio sul profondo. Fragile contro i passaggi lunghi o veloci.",
+                pros: "Ferma: Corse Interne/Esterne",
+                cons: "Soffre: Lanci Lunghi / Play Action",
+                rating: { 'inside_run': 1.3, 'outside_run': 1.2, 'short_pass': 0.9, 'deep_pass': 0.6, 'play_action': 0.6, 'screen_pass': 1.1 }
+            },
+            '3_4': {
+                name: "⚡ 3-4 Base (Pass Rush/Zone)",
+                type: "defense",
+                description: "3 Defensive Linemen e 4 Linebackers. Grande flessibilità di blitz.",
+                efficiency: "Difficile da leggere per l'attacco. Buona copertura dei passaggi intermedi.",
+                weakness: "I varchi centrali possono essere aperti da una linea d'attacco forte.",
+                pros: "Ferma: Play Action / Lancio Lungo",
+                cons: "Soffre: Corsa Interna",
+                rating: { 'inside_run': 0.9, 'outside_run': 1.0, 'short_pass': 1.0, 'deep_pass': 0.9, 'play_action': 0.8, 'screen_pass': 0.8 }
+            },
+            'nickel': {
+                name: "🦊 Formazione Nickel",
+                type: "defense",
+                description: "Sostituisce un Linebacker con un 5° Defensive Back per la velocità.",
+                efficiency: "Eccellente contro le corse esterne e i passaggi a corto raggio sul medio-campo.",
+                weakness: "Meno chili al centro della difesa. Fortemente esposta alla corsa interna diretta.",
+                pros: "Ferma: Passaggi Corti / Corsa Esterna",
+                cons: "Soffre: Corsa Interna",
+                rating: { 'inside_run': 0.7, 'outside_run': 1.2, 'short_pass': 1.1, 'deep_pass': 1.1, 'play_action': 1.0, 'screen_pass': 1.0 }
+            },
+            'dime': {
+                name: "🦅 Formazione Dime (No Fly Zone)",
+                type: "defense",
+                description: "6 Defensive Backs sul campo. Massima protezione aerea.",
+                efficiency: "Sbarra la strada a tutti i lanci lunghi (Hail Mary) e passaggi di disperazione.",
+                weakness: "Pessima per fermare le corse. Un corridore può penetrare facilmente per molte yard.",
+                pros: "Ferma: Lanci Lunghi / Play Action",
+                cons: "Soffre: Corsa Interna / Screen Pass",
+                rating: { 'inside_run': 0.5, 'outside_run': 0.8, 'short_pass': 1.2, 'deep_pass': 1.6, 'play_action': 1.2, 'screen_pass': 0.9 }
+            },
+            'blitz': {
+                name: "💥 All-Out Blitz",
+                type: "defense",
+                description: "Pressione estrema portando 5-6 uomini all'assalto del Quarterback.",
+                efficiency: "Forza sack catastrofici, fumbles e intercetti affrettando il lancio del QB.",
+                weakness: "Lascia la secondaria scoperta a uomo. Molto vulnerabile a Passaggi Screen o lanci corti veloci.",
+                pros: "Ferma: Lanci Lunghi / Corse",
+                cons: "Soffre: Screen Pass / Passaggi Corti",
+                rating: { 'inside_run': 1.4, 'outside_run': 1.3, 'short_pass': 0.5, 'deep_pass': 1.5, 'play_action': 1.1, 'screen_pass': 0.3 }
+            },
+            'punt_return': {
+                name: "🛡️ Punt Return Special",
+                type: "defense",
+                description: "Assetto speciale con bloccanti pronti ad aprire la strada per il ritorno del calcio.",
+                efficiency: "Garantisce massima sicurezza nel ricoprire la palla e blocchi strutturati sul ritorno.",
+                weakness: "Altamente vulnerabile a giochi a sorpresa o finte di lancio (Fake Punt) sul 4° down.",
+                pros: "Efficace vs: Calci di Allontanamento (Punt)",
+                cons: "Soffre: Finte di Calcio (Fake Play)",
+                rating: { 'inside_run': 0.4, 'outside_run': 0.4, 'short_pass': 0.3, 'deep_pass': 0.3, 'play_action': 0.2, 'screen_pass': 0.2, 'punt': 2.0 }
+            }
+        };
+
+        // --- STATO DEL GIOCO ---
+        let gameState = {
+            playerTeam: null,
+            cpuTeam: null,
+            playerScore: 0,
+            cpuScore: 0,
+            possession: 'player', // 'player' o 'cpu'
+            ballYard: 20,         // da 0 a 100 (0 = Endzone Player, 100 = Endzone CPU)
+            down: 1,
+            distance: 10,
+            firstDownYard: 30,    // Yard da raggiungere per il rinnovo del down
+            quarter: 1,
+            timeRemaining: 300,   // Secondi rimanenti per quarto (5 minuti = 300s)
+            selectedSchema: null, // Lo schema selezionato dall'utente
+            currentOpponentSchema: null, // Scelto dal PC
+            isGameOver: false,
+            direction: 1          // 1 se attacca da sx a dx (Player), -1 se attacca da dx a sx (CPU)
+        };
+
+        // --- INIZIALIZZAZIONE ---
+        window.addEventListener('load', () => {
+            initTeams();
+            setupEventListeners();
+            drawField();
+        });
+
+        // Popola i menu di selezione squadre
+        function initTeams() {
+            const playerSelect = document.getElementById('playerTeamSelect');
+            const cpuSelect = document.getElementById('cpuTeamSelect');
+            
+            TEAMS.forEach((team, idx) => {
+                let opt1 = document.createElement('option');
+                opt1.value = team.id;
+                opt1.textContent = team.name;
+                playerSelect.appendChild(opt1);
+
+                let opt2 = document.createElement('option');
+                opt2.value = team.id;
+                opt2.textContent = team.name;
+                // Pre-seleziona un avversario diverso di default
+                if (idx === 1) opt2.selected = true;
+                cpuSelect.appendChild(opt2);
+            });
+
+            updateTeamDetails();
+        }
+
+        function updateTeamDetails() {
+            const pId = document.getElementById('playerTeamSelect').value;
+            const cId = document.getElementById('cpuTeamSelect').value;
+            
+            const pTeam = TEAMS.find(t => t.id === pId);
+            const cTeam = TEAMS.find(t => t.id === cId);
+
+            document.getElementById('playerTeamDetails').textContent = `${pTeam.style} - ${pTeam.text}`;
+            document.getElementById('cpuTeamDetails').textContent = `${cTeam.style} - ${cTeam.text}`;
+            document.getElementById('currentMatchup').textContent = `${pTeam.name.split(' ')[0]} vs ${cTeam.name.split(' ')[0]}`;
+        }
+
+        function setupEventListeners() {
+            document.getElementById('playerTeamSelect').addEventListener('change', updateTeamDetails);
+            document.getElementById('cpuTeamSelect').addEventListener('change', updateTeamDetails);
+            
+            document.getElementById('startGameBtn').addEventListener('click', startGame);
+            document.getElementById('snapBallBtn').addEventListener('click', resolvePlay);
+            document.getElementById('clearLogBtn').addEventListener('click', () => {
+                document.getElementById('gameConsoleLog').innerHTML = '';
+            });
+            document.getElementById('resetMatchBtn').addEventListener('click', () => {
+                if(confirm("Sei sicuro di voler abbandonare la partita attuale?")) {
+                    resetToMainMenu();
+                }
+            });
+            document.getElementById('restartGameBtn').addEventListener('click', () => {
+                document.getElementById('gameOverModal').classList.add('hidden');
+                resetToMainMenu();
+            });
+        }
+
+        // --- INIZIO PARTITA ---
+        function startGame() {
+            const pId = document.getElementById('playerTeamSelect').value;
+            const cId = document.getElementById('cpuTeamSelect').value;
+            
+            if (pId === cId) {
+                alert("Scegli due squadre diverse per poter giocare!");
+                return;
+            }
+
+            gameState.playerTeam = TEAMS.find(t => t.id === pId);
+            gameState.cpuTeam = TEAMS.find(t => t.id === cId);
+
+            // Nascondi menu selezione, mostra gioco
+            document.getElementById('teamSelectionScreen').classList.add('hidden');
+            document.getElementById('gamePlayScreen').classList.remove('hidden');
+
+            // Setup parametri iniziali partita
+            gameState.playerScore = 0;
+            gameState.cpuScore = 0;
+            gameState.quarter = 1;
+            gameState.timeRemaining = 300;
+            gameState.isGameOver = false;
+
+            logToConsole(`🏈 BENVENUTO ALL'NCAA RETRO BOWL!`, 'retroOrange font-bold text-center');
+            logToConsole(`Oggi si affrontano: ${gameState.playerTeam.name} e ${gameState.cpuTeam.name}!`, 'text-white text-center font-bold');
+            
+            // Kickoff iniziale casuale per il possesso
+            const coinFlip = Math.random() < 0.5;
+            if (coinFlip) {
+                gameState.possession = 'player';
+                gameState.direction = 1; // va verso destra (100)
+                gameState.ballYard = 25; // Inizia sulle proprie 25 yard dopo touchback
+                gameState.down = 1;
+                gameState.distance = 10;
+                gameState.firstDownYard = 35;
+                logToConsole(`Vinto il lancio della monetina! Ricevi il kickoff sulle tue 25 yard in attacco.`, 'retroGreen');
+            } else {
+                gameState.possession = 'cpu';
+                gameState.direction = -1; // va verso sinistra (0)
+                gameState.ballYard = 75; // Inizia sulle proprie 25 (ovvero yard 75)
+                gameState.down = 1;
+                gameState.distance = 10;
+                gameState.firstDownYard = 65;
+                logToConsole(`CPU vince il kickoff. Attaccano partendo dalle loro 25 yard (yard 75 del campo).`, 'retroYellow');
+            }
+
+            updateScoreboard();
+            drawField();
+            renderPlaybook();
+        }
+
+        // --- DISEGNO DEL CAMPO VETTORIALE (SVG) ---
+        function drawField() {
+            const svg = document.getElementById('footballField');
+            svg.innerHTML = ''; // svuota
+
+            // Sfondo verde tenue per ricordare l'erba
+            const fieldRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            fieldRect.setAttribute("width", "1200");
+            fieldRect.setAttribute("height", "180");
+            fieldRect.setAttribute("fill", "#3d7a44");
+            svg.appendChild(fieldRect);
+
+            // Disegna le due Endzone (sx yard 0-100, dx yard 1100-1200)
+            const leftEndzone = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            leftEndzone.setAttribute("x", "0");
+            leftEndzone.setAttribute("y", "0");
+            leftEndzone.setAttribute("width", "100");
+            leftEndzone.setAttribute("height", "180");
+            leftEndzone.setAttribute("fill", "#2d5232"); // Colore retro per endzone sinistra coerente
+            svg.appendChild(leftEndzone);
+
+            const rightEndzone = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rightEndzone.setAttribute("x", "1100");
+            rightEndzone.setAttribute("y", "0");
+            rightEndzone.setAttribute("width", "100");
+            rightEndzone.setAttribute("height", "180");
+            rightEndzone.setAttribute("fill", "#542c2c"); // Colore retro per endzone destra coerente
+            svg.appendChild(rightEndzone);
+
+            // Testo Endzone
+            const ezLeftText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            ezLeftText.setAttribute("x", "50");
+            ezLeftText.setAttribute("y", "95");
+            ezLeftText.setAttribute("fill", "#f3f4f6");
+            ezLeftText.setAttribute("font-size", "22");
+            ezLeftText.setAttribute("font-weight", "bold");
+            ezLeftText.setAttribute("text-anchor", "middle");
+            ezLeftText.setAttribute("transform", "rotate(-90, 50, 90)");
+            ezLeftText.textContent = gameState.playerTeam ? gameState.playerTeam.name.split(' ')[0].toUpperCase() : "HOME";
+            svg.appendChild(ezLeftText);
+
+            const ezRightText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            ezRightText.setAttribute("x", "1150");
+            ezRightText.setAttribute("y", "95");
+            ezRightText.setAttribute("fill", "#f3f4f6");
+            ezRightText.setAttribute("font-size", "22");
+            ezRightText.setAttribute("font-weight", "bold");
+            ezRightText.setAttribute("text-anchor", "middle");
+            ezRightText.setAttribute("transform", "rotate(90, 1150, 90)");
+            ezRightText.textContent = gameState.cpuTeam ? gameState.cpuTeam.name.split(' ')[0].toUpperCase() : "AWAY";
+            svg.appendChild(ezRightText);
+
+            // Disegna linee yard ogni 5 yard (da yard 5 a 95 reali, proiettate su scala 100-1100 px)
+            // Ogni yard di gioco reale = 10 pixel sull'SVG (da x=100 a x=1100)
+            for (let y = 0; y <= 100; y += 5) {
+                const xPos = 100 + y * 10;
+                const isTenYards = y % 10 === 0;
+
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", xPos.toString());
+                line.setAttribute("y1", "0");
+                line.setAttribute("x2", xPos.toString());
+                line.setAttribute("y2", "180");
+                line.setAttribute("stroke", isTenYards ? "#f3f4f6" : "#d1d5db");
+                line.setAttribute("stroke-width", isTenYards ? "3" : "1");
+                svg.appendChild(line);
+
+                // Numeri ogni 10 yard in grigio chiarissimo
+                if (isTenYards && y > 0 && y < 100) {
+                    let numLabel = y;
+                    if (y > 50) numLabel = 100 - y;
+
+                    const textTop = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    textTop.setAttribute("x", xPos.toString());
+                    textTop.setAttribute("y", "30");
+                    textTop.setAttribute("fill", "#f3f4f6");
+                    textTop.setAttribute("font-size", "16");
+                    textTop.setAttribute("font-family", "monospace");
+                    textTop.setAttribute("text-anchor", "middle");
+                    textTop.textContent = numLabel.toString();
+                    svg.appendChild(textTop);
+
+                    const textBottom = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    textBottom.setAttribute("x", xPos.toString());
+                    textBottom.setAttribute("y", "162");
+                    textBottom.setAttribute("fill", "#f3f4f6");
+                    textBottom.setAttribute("font-size", "16");
+                    textBottom.setAttribute("font-family", "monospace");
+                    textBottom.setAttribute("text-anchor", "middle");
+                    textBottom.textContent = numLabel.toString();
+                    svg.appendChild(textBottom);
+                }
+            }
+
+            // Disegna marcature piccole "hashmarks" al centro in grigio chiaro
+            for (let y = 1; y < 100; y++) {
+                if (y % 5 !== 0) {
+                    const xPos = 100 + y * 10;
+                    // Hash superiori
+                    const hashTop = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    hashTop.setAttribute("x1", xPos.toString());
+                    hashTop.setAttribute("y1", "55");
+                    hashTop.setAttribute("x2", xPos.toString());
+                    hashTop.setAttribute("y2", "60");
+                    hashTop.setAttribute("stroke", "#d1d5db");
+                    hashTop.setAttribute("stroke-width", "1");
+                    svg.appendChild(hashTop);
+
+                    // Hash inferiori
+                    const hashBot = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    hashBot.setAttribute("x1", xPos.toString());
+                    hashBot.setAttribute("y1", "120");
+                    hashBot.setAttribute("x2", xPos.toString());
+                    hashBot.setAttribute("y2", "125");
+                    hashBot.setAttribute("stroke", "#d1d5db");
+                    hashBot.setAttribute("stroke-width", "1");
+                    svg.appendChild(hashBot);
+                }
+            }
+
+            // --- DISEGNA ELEMENTI DINAMICI (PALLA E PRIMO DOWN) ---
+            
+            // Linea del Primo Down (Giallo/Arancione retro)
+            const firstDownX = 100 + gameState.firstDownYard * 10;
+            if (firstDownX > 100 && firstDownX < 1100) {
+                const fdLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                fdLine.setAttribute("x1", firstDownX.toString());
+                fdLine.setAttribute("y1", "0");
+                fdLine.setAttribute("x2", firstDownX.toString());
+                fdLine.setAttribute("y2", "180");
+                fdLine.setAttribute("stroke", "#ffb703");
+                fdLine.setAttribute("stroke-width", "2.5");
+                fdLine.setAttribute("stroke-dasharray", "4,4");
+                svg.appendChild(fdLine);
+            }
+
+            // Linea di Scrimmage attuale (Azzurra / Neon retro)
+            const scrimmageX = 100 + gameState.ballYard * 10;
+            const scrLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            scrLine.setAttribute("x1", scrimmageX.toString());
+            scrLine.setAttribute("y1", "0");
+            scrLine.setAttribute("x2", scrimmageX.toString());
+            scrLine.setAttribute("y2", "180");
+            scrLine.setAttribute("stroke", "#00b4d8");
+            scrLine.setAttribute("stroke-width", "2");
+            svg.appendChild(scrLine);
+
+            // Icona Palla da Football 🏈 stilizzata
+            const ballGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            ballGroup.setAttribute("transform", `translate(${scrimmageX}, 90)`);
+            
+            // Corpo palla (ellisse marrone retro con bordo bianco)
+            const ballBody = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+            ballBody.setAttribute("cx", "0");
+            ballBody.setAttribute("cy", "0");
+            ballBody.setAttribute("rx", "18");
+            ballBody.setAttribute("ry", "10");
+            ballBody.setAttribute("fill", "#6f4e37");
+            ballBody.setAttribute("stroke", "#ffffff");
+            ballBody.setAttribute("stroke-width", "1.5");
+            ballGroup.appendChild(ballBody);
+
+            // Cuciture bianche
+            const lace = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            lace.setAttribute("x1", "-10");
+            lace.setAttribute("y1", "0");
+            lace.setAttribute("x2", "10");
+            lace.setAttribute("y2", "0");
+            lace.setAttribute("stroke", "#ffffff");
+            lace.setAttribute("stroke-width", "2");
+            ballGroup.appendChild(lace);
+
+            for (let i = -6; i <= 6; i += 4) {
+                const crossLace = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                crossLace.setAttribute("x1", i.toString());
+                crossLace.setAttribute("y1", "-3");
+                crossLace.setAttribute("x2", i.toString());
+                crossLace.setAttribute("y2", "3");
+                crossLace.setAttribute("stroke", "#ffffff");
+                crossLace.setAttribute("stroke-width", "1.5");
+                ballGroup.appendChild(crossLace);
+            }
+
+            svg.appendChild(ballGroup);
+
+            // Freccia di direzione d'attacco
+            const dirGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            const arrowX = gameState.direction === 1 ? scrimmageX + 35 : scrimmageX - 35;
+            dirGroup.setAttribute("transform", `translate(${arrowX}, 90)`);
+
+            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            if (gameState.direction === 1) {
+                arrow.setAttribute("d", "M -10 -5 L 5 0 L -10 5 Z");
+            } else {
+                arrow.setAttribute("d", "M 10 -5 L -5 0 L 10 5 Z");
+            }
+            arrow.setAttribute("fill", "#ffb703");
+            dirGroup.appendChild(arrow);
+            svg.appendChild(dirGroup);
+        }
+
+        // --- AGGIORNAMENTO DATI / INTERFACCIA ---
+        function updateScoreboard() {
+            // Testo punteggio
+            document.getElementById('scoreDisplay').innerHTML = `
+                <span class="text-retroGreen">${gameState.playerScore}</span> : 
+                <span class="text-retroYellow">${gameState.cpuScore}</span>
+            `;
+
+            // Down e Distanza
+            let distText = gameState.distance === 100 - gameState.ballYard ? "Goal" : `${gameState.distance} yd`;
+            if (gameState.possession === 'cpu') {
+                distText = gameState.distance === gameState.ballYard ? "Goal" : `${gameState.distance} yd`;
+            }
+            document.getElementById('downDistanceDisplay').textContent = `${gameState.down}° & ${distText}`;
+
+            // Linea yard attuale convertita nello standard NFL/NCAA (es. Nostra 20, Metà campo, Loro 30)
+            let yardLoc = gameState.ballYard;
+            let displayYard = "";
+            if (yardLoc === 50) {
+                displayYard = "Linea 50";
+            } else if (yardLoc < 50) {
+                displayYard = `${gameState.playerTeam.name.split(' ')[0]} ${yardLoc}`;
+            } else {
+                displayYard = `${gameState.cpuTeam.name.split(' ')[0]} ${100 - yardLoc}`;
+            }
+            document.getElementById('ballYardDisplay').textContent = displayYard;
+
+            // Tempo di gioco
+            const mins = Math.floor(gameState.timeRemaining / 60);
+            const secs = (gameState.timeRemaining % 60).toString().padStart(2, '0');
+            document.getElementById('timeDisplay').textContent = `Q${gameState.quarter} - ${mins}:${secs}`;
+
+            // Descrizione dettagliata inferiore
+            const pName = gameState.playerTeam.name.split(' ')[0];
+            const cName = gameState.cpuTeam.name.split(' ')[0];
+            
+            let ballText = "";
+            if (yardLoc === 50) {
+                ballText = `Palla a metà campo (50 yard)`;
+            } else if (yardLoc < 50) {
+                ballText = `Palla sulle ${yardLoc} yard di ${pName}`;
+            } else {
+                ballText = `Palla sulle ${100 - yardLoc} yard di ${cName}`;
+            }
+
+            const currentAttacker = gameState.possession === 'player' ? pName : cName;
+            document.getElementById('ballPositionText').textContent = `${ballText}. ${currentAttacker} in attacco.`;
+            
+            document.getElementById('possessionIndicatorText').innerHTML = `
+                POSSESSO: <span class="${gameState.possession === 'player' ? 'text-retroGreen font-bold' : 'text-retroYellow font-bold'}">
+                    ${gameState.possession === 'player' ? pName.toUpperCase() : cName.toUpperCase()}
+                </span>
+            `;
+        }
+
+        // --- LOG DI CONSOLE RETRO ---
+        function logToConsole(message, cssClass = 'text-white') {
+            const consoleLog = document.getElementById('gameConsoleLog');
+            const messageEl = document.createElement('div');
+            messageEl.className = `p-1 border-b border-[#152b18] ${cssClass}`;
+            messageEl.innerHTML = `> ${message}`;
+            consoleLog.appendChild(messageEl);
+            
+            // Auto scroll in basso
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        // --- CARICAMENTO INTERFACCIA TATTICA (PLAYBOOK O DIFESA) ---
+        function renderPlaybook() {
+            const grid = document.getElementById('playOptionsGrid');
+            grid.innerHTML = ''; // svuota precedente
+
+            const isAttacking = (gameState.possession === 'player');
+            gameState.selectedSchema = null;
+            document.getElementById('snapBallBtn').disabled = true;
+
+            // Reset box di analisi
+            document.getElementById('playbookTitle').textContent = isAttacking ? "🏈 Playbook d'Attacco" : "🛡️ Chiamate di Difesa";
+            document.getElementById('analysisTitle').textContent = isAttacking ? "Scegli un'azione per l'Attacco" : "Imposta uno schema di Difesa";
+            document.getElementById('analysisDesc').textContent = isAttacking ? "Prepara lo schema più adatto alla situazione di down attuale." : "Leggi la situazione d'attacco avversaria e posiziona i tuoi difensori.";
+            document.getElementById('analysisPros').textContent = "";
+            document.getElementById('analysisCons').textContent = "";
+
+            if (isAttacking) {
+                // Giocatore in attacco: mostra gli schemi dal PLAYBOOK
+                Object.keys(PLAYBOOK).forEach(key => {
+                    const schema = PLAYBOOK[key];
+                    
+                    // Controlla se abilitare calci
+                    if (key === 'punt' && gameState.down !== 4) return; 
+                    if (key === 'field_goal' && gameState.down !== 4) return;
+
+                    const btn = document.createElement('button');
+                    btn.className = "retro-btn text-xs font-bold py-2 px-1 rounded flex flex-col justify-center items-center text-center";
+                    btn.innerHTML = `
+                        <span class="text-retroOrange">${schema.name}</span>
+                        <span class="text-[9px] opacity-75 capitalize">(${schema.type})</span>
+                    `;
+                    
+                    btn.onclick = () => selectSchema(key, schema, true);
+                    grid.appendChild(btn);
+                });
+            } else {
+                // Giocatore in difesa: mostra gli schemi difensivi
+                Object.keys(DEFENSE_PLAYBOOK).forEach(key => {
+                    const schema = DEFENSE_PLAYBOOK[key];
+
+                    // MOSTRA "Punt Return" SOLO sul 4° down
+                    if (key === 'punt_return' && gameState.down !== 4) return;
+                    // NASCONDI "Punt Return" sui down normali per non congestionare la vista
+                    if (key !== 'punt_return' && gameState.down === 4 && key === 'dime') {
+                        // Facciamo spazio sul 4° down per il Punt Return
+                    }
+
+                    const btn = document.createElement('button');
+                    btn.className = "retro-btn text-xs font-bold py-2 px-1 rounded flex flex-col justify-center items-center text-center";
+                    btn.innerHTML = `
+                        <span class="text-retroYellow">${schema.name.split(' (')[0]}</span>
+                        <span class="text-[9px] opacity-75">Schema di copertura</span>
+                    `;
+                    
+                    btn.onclick = () => selectSchema(key, schema, false);
+                    grid.appendChild(btn);
+                });
+            }
+        }
+
+        // Selezione dello schema tattico
+        function selectSchema(key, schema, isOffense) {
+            gameState.selectedSchema = { key, ...schema };
+            
+            // Evidenzia visivamente la selezione (puoi aggiungere bordi neon dedicati)
+            document.getElementById('analysisTitle').textContent = schema.name;
+            document.getElementById('analysisDesc').textContent = schema.description;
+            
+            if (isOffense) {
+                document.getElementById('analysisDesc').innerHTML = `${schema.description}<br><br><span class="text-retroYellow font-bold">EFFICACIA:</span> ${schema.efficiency}<br><span class="text-red-400 font-bold">DEBOLEZZA:</span> ${schema.weakness}`;
+                document.getElementById('analysisPros').textContent = schema.pros;
+                document.getElementById('analysisCons').textContent = schema.cons;
+            } else {
+                document.getElementById('analysisDesc').innerHTML = `${schema.description}<br><br><span class="text-retroYellow font-bold">FORZA:</span> ${schema.efficiency}<br><span class="text-red-400 font-bold">SOPPORTA MALE:</span> ${schema.weakness}`;
+                document.getElementById('analysisPros').textContent = schema.pros;
+                document.getElementById('analysisCons').textContent = schema.cons;
+            }
+
+            document.getElementById('snapBallBtn').removeAttribute('disabled');
+            document.getElementById('tacticalStatus').textContent = "Pronto allo Snap!";
+        }
+
+        // --- RISOLUZIONE DEL PLAY (SNAP THE BALL) ---
+        function resolvePlay() {
+            if (!gameState.selectedSchema) return;
+
+            // 1. Scelta automatica della CPU (la controparte dell'azione del giocatore)
+            let offSchema, defSchema;
+            
+            if (gameState.possession === 'player') {
+                // Giocatore Attacca, CPU Difende
+                offSchema = gameState.selectedSchema;
+                defSchema = cpuSelectDefense();
+                logToConsole(`Chiamata d'attacco: ${offSchema.name}`, 'text-retroGreen font-semibold');
+                logToConsole(`La difesa di ${gameState.cpuTeam.name} si schiera in: ${defSchema.name}`, 'text-retroYellow');
+            } else {
+                // CPU Attacca, Giocatore Difende
+                offSchema = cpuSelectOffense();
+                defSchema = gameState.selectedSchema;
+                logToConsole(`L'attacco di ${gameState.cpuTeam.name} esegue: ${offSchema.name}`, 'text-retroYellow font-semibold');
+                logToConsole(`La tua difesa si dispone in: ${defSchema.name}`, 'text-retroGreen');
+            }
+
+            // Consuma tempo casuale per azione (tra 15 e 28 secondi)
+            const secondsUsed = Math.floor(Math.random() * 14) + 15;
+            gameState.timeRemaining = Math.max(0, gameState.timeRemaining - secondsUsed);
+
+            // 2. Calcolo esito dell'azione
+            if (offSchema.type === 'special') {
+                resolveSpecialPlay(offSchema);
+            } else {
+                resolveStandardPlay(offSchema, defSchema);
+            }
+
+            // 3. Controlli post-azione (fine quarto, fine partita, cambi possesso)
+            checkTimeAndQuarters();
+            
+            if (!gameState.isGameOver) {
+                updateScoreboard();
+                drawField();
+                renderPlaybook();
+            }
+        }
+
+        // IA CPU: Selezione Difesa
+        function cpuSelectDefense() {
+            // La CPU legge parzialmente la situazione (es. se è 3° e lungo, predilige Dime o Blitz)
+            const keys = Object.keys(DEFENSE_PLAYBOOK);
+            let chosenKey = keys[Math.floor(Math.random() * keys.length)];
+
+            if (gameState.distance >= 12 && Math.random() < 0.6) {
+                chosenKey = Math.random() < 0.5 ? 'dime' : 'blitz'; // preferisce pass protection
+            } else if (gameState.distance <= 3 && Math.random() < 0.6) {
+                chosenKey = '4_3'; // preferisce run defense per poche yard
+            }
+            
+            return { key: chosenKey, ...DEFENSE_PLAYBOOK[chosenKey] };
+        }
+
+        // IA CPU: Selezione Attacco
+        function cpuSelectOffense() {
+            const keys = Object.keys(PLAYBOOK).filter(k => k !== 'punt' && k !== 'field_goal');
+            
+            // Condizione per Punt o Field Goal automatici della CPU
+            if (gameState.down === 4) {
+                const targetEndzoneDist = gameState.ballYard; // se attacca verso sx (0), dist = ballYard
+                if (targetEndzoneDist <= 35) {
+                    return { key: 'field_goal', ...PLAYBOOK['field_goal'] };
+                } else {
+                    return { key: 'punt', ...PLAYBOOK['punt'] };
+                }
+            }
+
+            // Scelta normale bilanciata da propensione di passaggio della squadra
+            let chosenKey;
+            const r = Math.random();
+            if (r < gameState.cpuTeam.passRate) {
+                // Passaggi
+                const passKeys = keys.filter(k => PLAYBOOK[k].type === 'pass');
+                chosenKey = passKeys[Math.floor(Math.random() * passKeys.length)];
+            } else {
+                // Corse
+                const runKeys = keys.filter(k => PLAYBOOK[k].type === 'run');
+                chosenKey = runKeys[Math.floor(Math.random() * runKeys.length)];
+            }
+
+            return { key: chosenKey, ...PLAYBOOK[chosenKey] };
+        }
+
+        // Risoluzione dei Calci (Punt / Field Goal)
+        function resolveSpecialPlay(offSchema) {
+            const attacker = gameState.possession === 'player' ? gameState.playerTeam.name.split(' ')[0] : gameState.cpuTeam.name.split(' ')[0];
+            
+            if (offSchema.key === 'punt') {
+                const puntYards = Math.floor(Math.random() * 16) + 35; // 35-50 yard di calcio
+                logToConsole(`🏈 CALCIO DI PUNT! ${attacker} calcia la palla per ${puntYards} yard!`, 'text-retroOrange');
+                
+                // Sposta palla e cambia possesso
+                if (gameState.possession === 'player') {
+                    gameState.ballYard = Math.min(99, gameState.ballYard + puntYards);
+                    // Se entra in endzone, è touchback (palla posizionata sulle 20 yard CPU ovvero 80)
+                    if (gameState.ballYard >= 100) {
+                        gameState.ballYard = 80;
+                        logToConsole(`Touchback! Ricezione in Endzone. La CPU riparte dalle proprie 20 yard.`, 'opacity-75');
+                    } else {
+                        logToConsole(`Ricevitore avversario atterrato sulle yard ${100 - gameState.ballYard}.`, 'opacity-75');
+                    }
+                } else {
+                    gameState.ballYard = Math.max(1, gameState.ballYard - puntYards);
+                    if (gameState.ballYard <= 0) {
+                        gameState.ballYard = 20;
+                        logToConsole(`Touchback! Ricezione in Endzone. Riparti dalle tue 20 yard.`, 'opacity-75');
+                    } else {
+                        logToConsole(`Hai fermato il ritornatore sulle tue ${gameState.ballYard} yard.`, 'opacity-75');
+                    }
+                }
+                changePossession();
+            } 
+            else if (offSchema.key === 'field_goal') {
+                // Calcola distanza del calcio: distanza da endzone + 17 yard (10 della endzone + 7 dello snap)
+                let distanceToGoal = gameState.possession === 'player' ? (100 - gameState.ballYard) : gameState.ballYard;
+                const totalCalcioDist = distanceToGoal + 17;
+                
+                logToConsole(`🎯 TENTATIVO DI FIELD GOAL da ${totalCalcioDist} yard per i ${attacker}!`, 'text-white font-bold');
+                
+                // Percentuale di successo scalata sulla distanza
+                let successChance = 0.95 - (totalCalcioDist - 20) * 0.015;
+                if (totalCalcioDist > 55) successChance = 0.15; // Molto difficile sopra le 55 yard
+
+                if (Math.random() < successChance) {
+                    logToConsole(`✅ CALCIO CORRETTO IN MEZZO AI PALI! Sono 3 punti!`, 'text-retroGreen font-bold text-lg');
+                    if (gameState.possession === 'player') {
+                        gameState.playerScore += 3;
+                    } else {
+                        gameState.cpuScore += 3;
+                    }
+                    
+                    // Dopo il FG segnato, l'avversario riparte dalle proprie 25 yard (Kickoff virtuale)
+                    kickoffReset();
+                } else {
+                    logToConsole(`❌ CALCIO SBAGLIATO! Pallone largo o corto! Nessun punto guadagnato.`, 'text-red-400 font-bold');
+                    // In caso di FG fallito, l'avversario prende il possesso sul punto dello snap
+                    changePossession();
+                }
+            }
+        }
+
+        // Risoluzione degli schemi Standard (Corsa vs Passaggio)
+        function resolveStandardPlay(offSchema, defSchema) {
+            const attacker = gameState.possession === 'player' ? gameState.playerTeam : gameState.cpuTeam;
+            const defender = gameState.possession === 'player' ? gameState.cpuTeam : gameState.playerTeam;
+
+            // Coefficiente di accoppiamento schema attacco/difesa
+            const matchupMod = defSchema.rating[offSchema.key] || 1.0;
+            
+            // Influenze di forza squadra
+            const teamPower = offSchema.type === 'run' ? attacker.runPower : 1.0;
+            const defMod = defender.defPower; // Maggiore potere = difesa migliore, riduce guadagno yard
+
+            // Base yardage casuale a seconda dello schema
+            let baseYard = 0;
+            let playComment = "";
+            let isIncomplete = false;
+            let isSack = false;
+            let isTurnover = false;
+
+            const roll = Math.random();
+
+            if (offSchema.type === 'run') {
+                // --- RISOLUZIONE CORSA ---
+                if (matchupMod <= 0.6 && roll < 0.15) {
+                    // Difesa dominante: Corsa bloccata dietro la linea (Tackle for Loss)
+                    baseYard = - (Math.floor(Math.random() * 3) + 1);
+                    playComment = `CONTATTO IMMEDIATO! La difesa penetra la linea e atterra il corridore dietro la linea di scrimmage!`;
+                } else if (roll < 0.02) {
+                    // Fumble perso! (Turnover)
+                    isTurnover = true;
+                    playComment = `COLPO DURISSIMO! Il corridore perde il controllo del pallone... FUMBLE RICOPERTO DALLA DIFESA!!`;
+                } else {
+                    // Corsa normale regolata dai modificatori
+                    const maxYard = offSchema.key === 'outside_run' ? 16 : 8; // le corse esterne hanno varianza maggiore
+                    baseYard = Math.floor(Math.random() * maxYard) * matchupMod * (teamPower / defMod);
+                    baseYard = Math.max(-2, Math.floor(baseYard)); // almeno qualche perdita o yard
+                    
+                    if (baseYard > 10) {
+                        playComment = `GRANDE VARCO! Splendido blocco della linea, il corridore si infila e vola per ${baseYard} yard!`;
+                    } else if (baseYard > 0) {
+                        playComment = `Corsa solida di determinazione e forza fisica per ${baseYard} yard.`;
+                    } else {
+                        playComment = `Incutere timore centralmente ma la difesa si chiude subito. Guadagno minimo.`;
+                    }
+                }
+            } else {
+                // --- RISOLUZIONE PASSAGGIO ---
+                // Calcolo chance di SACK (QB placcato prima del lancio)
+                let sackChance = 0.06;
+                if (defSchema.key === 'blitz') sackChance = 0.18; // Blitz aumenta molto chance di sack
+                if (offSchema.key === 'screen_pass') sackChance = 0.02; // Lo screen evita quasi del tutto il sack
+
+                // Calcolo Completamento / Intercetto
+                let completionChance = offSchema.key === 'short_pass' ? 0.72 : 0.45;
+                if (offSchema.key === 'play_action') completionChance = 0.60;
+                if (offSchema.key === 'screen_pass') completionChance = 0.80;
+
+                // Modificatori tattici sul completamento
+                completionChance *= matchupMod;
+
+                if (roll < sackChance) {
+                    // SACK!
+                    isSack = true;
+                    baseYard = - (Math.floor(Math.random() * 6) + 4); // Perdita di 4-10 yard
+                    playComment = `🚨 SACK!! Il Quarterback non trova liberi, la pressione lo travolge e viene atterrato in perdita di ${Math.abs(baseYard)} yard!`;
+                } else if (roll > (1 - 0.04 * (2 - matchupMod)) && offSchema.key !== 'screen_pass') {
+                    // INTERCETTO! (Turnover)
+                    isTurnover = true;
+                    playComment = `❌ INTERCETTATO!!! Il lancio è impreciso, il Defensive Back legge la traiettoria e agguanta la palla al volo! CAMBIO POSSESSO!`;
+                } else if (Math.random() > completionChance) {
+                    // INCOMPLETO
+                    isIncomplete = true;
+                    baseYard = 0;
+                    playComment = `INCOMPLETO! Il passaggio era indirizzato sull'esterno ma cade a terra privo di precisione.`;
+                } else {
+                    // COMPLETATO!
+                    const maxYard = offSchema.key === 'deep_pass' ? 45 : (offSchema.key === 'short_pass' ? 12 : 22);
+                    baseYard = Math.floor(Math.random() * (maxYard - 2)) + 3; // garantisce almeno 3 yard se completato
+                    baseYard = Math.floor(baseYard * matchupMod * (teamPower / defMod));
+                    
+                    if (baseYard > 20) {
+                        playComment = `INCREDIBILE LANCIO! Ricezione spettacolare in tuffo lungo la linea laterale! Guadagno colossale di ${baseYard} yard!`;
+                    } else {
+                        playComment = `Ricezione pulita del tight-end sulla traccia centrale per ${baseYard} yard.`;
+                    }
+                }
+            }
+
+            // Applica guadagno/perdita di yard in base alla direzione d'attacco
+            // Player attacca verso 100 (+), CPU attacca verso 0 (-)
+            const actualYardDiff = baseYard * gameState.direction;
+            gameState.ballYard += actualYardDiff;
+
+            // Costruisci il commento finale per la cronaca
+            const offName = attacker.name.split(' ')[0];
+            const yardStr = gameState.possession === 'player' ? gameState.ballYard : (100 - gameState.ballYard);
+            
+            let logStyle = gameState.possession === 'player' ? 'text-white' : 'text-gray-300';
+            
+            // Stampa l'esito dell'azione nel terminale
+            logToConsole(`${gameState.down}° & ${gameState.distance} - ${playComment}`, logStyle);
+
+            if (isTurnover) {
+                changePossession();
+                return;
+            }
+
+            // 4. Calcola avanzamento per il primo down o Touchdown!
+            if (gameState.possession === 'player' && gameState.ballYard >= 100) {
+                // TOUCHDOWN GIOCATORE!!
+                triggerTouchdown(true);
+                return;
+            } else if (gameState.possession === 'cpu' && gameState.ballYard <= 0) {
+                // TOUCHDOWN CPU!!
+                triggerTouchdown(false);
+                return;
+            }
+
+            // Verifica avanzamento del down attuale
+            if (baseYard > 0) {
+                gameState.distance -= baseYard;
+            } else {
+                gameState.distance += Math.abs(baseYard); // arretramento aumenta distanza
+            }
+
+            if (gameState.distance <= 0) {
+                // NUOVO PRIMO DOWN!
+                gameState.down = 1;
+                gameState.distance = 10;
+                
+                // Ricalcola yard del prossimo primo down (limita a endzone)
+                if (gameState.possession === 'player') {
+                    gameState.firstDownYard = Math.min(100, gameState.ballYard + 10);
+                } else {
+                    gameState.firstDownYard = Math.max(0, gameState.ballYard - 10);
+                }
+                logToConsole(`🏈 PRIMO DOWN! Catene spostate avanti. Nuovo set di 4 tentativi.`, 'text-retroGreen font-bold');
+            } else {
+                // Down successivo
+                gameState.down++;
+                if (gameState.down > 4) {
+                    // TURNOVER ON DOWNS!
+                    logToConsole(`❌ TURNOVER ON DOWNS! La difesa resiste stoicamente sul quarto tentativo!`, 'text-red-400 font-bold text-center border-y border-red-500/20 py-1');
+                    changePossession();
+                }
+            }
+        }
+
+        // Gestione del Touchdown (6 punti + Extra Point automatico da 1 punto)
+        function triggerTouchdown(isPlayer) {
+            const teamName = isPlayer ? gameState.playerTeam.name.toUpperCase() : gameState.cpuTeam.name.toUpperCase();
+            
+            logToConsole(`🎉 TOUCHDOWN!!! ${teamName} SBANCA L'ENDZONE!! 🎉`, 'text-retroOrange font-bold text-lg text-center border-2 border-retroOrange p-2 my-2 animate-pulse');
+            
+            if (isPlayer) {
+                gameState.playerScore += 6;
+                // Calcio addizionale automatico (90% successo)
+                if (Math.random() < 0.93) {
+                    gameState.playerScore += 1;
+                    logToConsole(`Extra Point trasformato! +1 Punto.`, 'text-retroGreen');
+                } else {
+                    logToConsole(`Incredibile! Calcio addizionale fallito o bloccato dalla difesa!`, 'text-red-400');
+                }
+            } else {
+                gameState.cpuScore += 6;
+                if (Math.random() < 0.93) {
+                    gameState.cpuScore += 1;
+                    logToConsole(`La CPU trasforma l'Extra Point.`, 'text-retroYellow');
+                } else {
+                    logToConsole(`La difesa blocca il calcio addizionale avversario!`, 'text-retroGreen');
+                }
+            }
+
+            kickoffReset();
+        }
+
+        // Inversione di possesso (Turnover, Punt o Calcio fallito)
+        function changePossession() {
+            gameState.possession = gameState.possession === 'player' ? 'cpu' : 'player';
+            gameState.direction = -gameState.direction; // inverti direzione di marcia sul campo
+            gameState.down = 1;
+            gameState.distance = 10;
+            
+            // Imposta obiettivo primo down
+            if (gameState.possession === 'player') {
+                gameState.firstDownYard = Math.min(100, gameState.ballYard + 10);
+                logToConsole(`Prendi il controllo dell'Attacco!`, 'text-retroGreen font-bold');
+            } else {
+                gameState.firstDownYard = Math.max(0, gameState.ballYard - 10);
+                logToConsole(`Prepariamo la Difesa per arginare l'attacco CPU!`, 'text-retroYellow font-bold');
+            }
+        }
+
+        // Reset della palla dopo segnatura (FG o TD)
+        function kickoffReset() {
+            // Chi ha subito il punto riceve la palla sulle proprie 25 yard
+            // Se la CPU ha appena segnato, riceve il giocatore
+            const cpuJustScored = (gameState.possession === 'cpu'); // o controllo punteggi precedenti, ma qui usiamo il flusso standard di possesso
+            
+            if (cpuJustScored) {
+                gameState.possession = 'player';
+                gameState.direction = 1;
+                gameState.ballYard = 25;
+                gameState.down = 1;
+                gameState.distance = 10;
+                gameState.firstDownYard = 35;
+                logToConsole(`Ricezione del kickoff. Riparti in attacco dalle tue 25 yard.`, 'text-retroGreen');
+            } else {
+                gameState.possession = 'cpu';
+                gameState.direction = -1;
+                gameState.ballYard = 75; // 25 yard dal lato destro (100-25)
+                gameState.down = 1;
+                gameState.distance = 10;
+                gameState.firstDownYard = 65;
+                logToConsole(`La CPU riceve il calcio d'inizio e riparte dalle proprie 25 yard.`, 'text-retroYellow');
+            }
+        }
+
+        // Gestione del tempo e dei quarti di gioco
+        function checkTimeAndQuarters() {
+            if (gameState.timeRemaining <= 0) {
+                if (gameState.quarter < 4) {
+                    gameState.quarter++;
+                    gameState.timeRemaining = 300; // ricarica 5 minuti
+                    logToConsole(`🔔 FINE DEL QUARTO DI GIOCO! Inizia il Quarto ${gameState.quarter}! Svuotamento parziale campo...`, 'text-retroOrange text-center font-bold');
+                } else {
+                    // Fine del 4° Quarto = Fine partita!
+                    endGame();
+                }
+            }
+        }
+
+        // Termina il match
+        function endGame() {
+            gameState.isGameOver = true;
+            document.getElementById('gameOverModal').classList.remove('hidden');
+            
+            const pScore = gameState.playerScore;
+            const cScore = gameState.cpuScore;
+
+            document.getElementById('finalScoreDisplay').textContent = `${pScore} - ${cScore}`;
+
+            let msg = "";
+            if (pScore > cScore) {
+                msg = `Complimenti Coach! Hai guidato i tuoi ${gameState.playerTeam.name} alla vittoria della prestigiosa finale NCAA! La tua strategia tattica è stata impeccabile! 🏆🏈`;
+                document.getElementById('gameOverTitle').textContent = "VITTORIA CAMPIONATO!";
+                document.getElementById('gameOverTitle').className = "text-2xl font-bold text-retroGreen tracking-widest animate-bounce";
+            } else if (pScore < cScore) {
+                msg = `Sconfitta amara per i ${gameState.playerTeam.name}. La CPU ha letto meglio le coperture secondarie e ha dominato le linee. Torna a studiare il playbook per la prossima stagione! 📋`;
+                document.getElementById('gameOverTitle').textContent = "SCONFITTA RETRO";
+                document.getElementById('gameOverTitle').className = "text-2xl font-bold text-red-500 tracking-widest";
+            } else {
+                msg = `Incredibile pareggio dopo i tempi regolamentari! Entrambe le università condividono la gloria e il trofeo quest'anno in perfetto spirito sportivo! 🤝`;
+                document.getElementById('gameOverTitle').textContent = "PAREGGIO CLAMOROSO";
+                document.getElementById('gameOverTitle').className = "text-2xl font-bold text-retroYellow tracking-widest";
+            }
+
+            document.getElementById('gameOverMsg').textContent = msg;
+        }
+
+        function resetToMainMenu() {
+            document.getElementById('gamePlayScreen').classList.add('hidden');
+            document.getElementById('teamSelectionScreen').classList.remove('hidden');
+            document.getElementById('gameConsoleLog').innerHTML = '';
+        }
+
+        // --- REGISTRAZIONE PWA & SERVICE WORKER ---
+        // Genera dinamicamente un Service Worker per consentire l'installazione offline su Android/iOS
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'retro-ncaa-v1';
+                const ASSETS = [
+                    './',
+                    './index.html'
+                ];
+                self.addEventListener('install', e => {
+                    e.waitUntil(
+                        caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+                    );
+                });
+                self.addEventListener('fetch', e => {
+                    e.respondWith(
+                        caches.match(e.request).then(res => res || fetch(e.request))
+                    );
+                });
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            navigator.serviceWorker.register(swUrl).then(reg => {
+                console.log('PWA Service Worker registrato con successo.');
+            }).catch(err => {
+                console.warn('Registrazione SW Fallita:', err);
+            });
+        }
+
+        // Gestione pulsante installazione PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('installPwaBtn');
+            installBtn.classList.remove('hidden');
+            
+            installBtn.addEventListener('click', () => {
+                installBtn.classList.add('hidden');
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('L\'utente ha installato la PWA');
+                    }
+                    deferredPrompt = null;
+                });
+            });
+        });
+    </script>
+</body>
+</html>
